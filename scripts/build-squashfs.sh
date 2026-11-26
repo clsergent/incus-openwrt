@@ -12,7 +12,11 @@ cd "squashfs-tools-${SQUASHFS_VERSION}/squashfs-tools"
 # Plain `make` (not just the unsquashfs target) also builds mksquashfs
 # and the sqfscat/sqfstar symlinks alongside it, all needed for the full
 # squashfs-tools-static apk subpackage below.
-make -j"$(nproc)" EXTRA_CFLAGS="-static $ARCH_CFLAGS" LDFLAGS="-static"
+
+make -j"$(nproc)" \
+  EXTRA_CFLAGS="-static" \
+  EXTRA_LDFLAGS="-static" \
+  LDFLAGS="-static"
 cp unsquashfs "$OUT_DIR/unsquashfs"
 
 # Full mksquashfs/unsquashfs/sqfscat/sqfstar set, staged for the

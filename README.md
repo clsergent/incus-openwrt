@@ -1,29 +1,28 @@
-# incus-openwrt-filogic
+# Incus for ARM64 OpenWrt targets
 
-[Incus](https://github.com/lxc/incus) is a container and virtual machine
-manager. This repo builds it statically - `incusd` (server) and `incus`
-(client) - on Alpine.
+This repository builds static Incus binaries and APK packages for ARM64 targets.
+Common versions and defaults live in `common.env`; hardware-specific settings live
+in `targets/*.env` and override common values.
 
-Optimized for MediaTek Filogic 880 (MT7988A, quad-core Cortex-A73) devices. 
+## Targets
 
-## Install on OpenWrt
+- `filogic`: original MediaTek Filogic/MT7988A target (`aarch64_cortex-a53`) with
+  Cortex-A73 tuning and an ARMv8.0 Go baseline.
+- `rk3582`: Rockchip RK3582 target (`aarch64_generic`) for heterogeneous
+  Cortex-A76/A55 systems, using no CPU-specific C tuning and an ARMv8.0 baseline.
 
-`.apk` packages are published to a signed [apk repository](https://gonciarz.github.io/incus-openwrt-filogic/)
-via GitHub Pages; raw binaries are published to [GitHub Releases](../../releases).
-Add the key and repo once, then install like any other OpenWrt package:
+Shared versions include Alpine, Go, Incus, eudev, dbus, attr, squashfs-tools, and
+xz. Target files may override package architecture, compiler flags, Go ISA,
+package signing-key filename, and package description.
 
-```sh
-wget -O /etc/apk/keys/incus-openwrt-filogic.pem \
-    https://gonciarz.github.io/incus-openwrt-filogic/incus-openwrt-filogic.pem
-echo 'https://gonciarz.github.io/incus-openwrt-filogic/aarch64_cortex-a53/packages.adb' \
-    > /etc/apk/repositories.d/incus.list
-
-apk update
-apk add incus-static
-```
-
-## How to build locally (on arm64)
+## Build locally
 
 ```sh
-./build.sh 7.0.1
+INCUS_SIGN_KEY_FILE=/path/to/private-key.pem ./build.sh rk3582
 ```
+
+Packages are written to `output/<target>/.`
+
+## GitHub Actions
+
+Choose `filogic` or `rk3582` when running the workflow. Configure the `INCUS_SIGN_KEY` secret with the PEM-encoded APK signing private key. The workflow uploads the generated package set as an artifact.
