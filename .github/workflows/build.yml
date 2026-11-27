@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  build-packages:
+  build-package:
     runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
@@ -33,18 +33,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Prepare signing key
-        env:
-          INCUS_SIGN_KEY: ${{ secrets.INCUS_SIGN_KEY }}
-        run: |
-          set -eu
-          test -n "$INCUS_SIGN_KEY" || {
-            echo "INCUS_SIGN_KEY secret is required" >&2
-            exit 1
-          }
-          printf '%s' "$INCUS_SIGN_KEY" > "$RUNNER_TEMP/incus-sign-key.pem"
-          chmod 600 "$RUNNER_TEMP/incus-sign-key.pem"
-
       - name: Build container image
         run: |
           docker buildx build \
@@ -53,24 +41,60 @@ jobs:
             --tag incus-openwrt-builder \
             .
 
-      - name: Build target packages
+      - name: Build standalone APK
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/output/${{ matrix.target }}"
+          set -eu
+          mkdir -p "$GITHUB_WORKSPACE/output/$TARGET"
+
           docker run --rm \
             --platform linux/arm64 \
             -e BUILD_IN_CONTAINER=1 \
-            -e BUILD_TARGET="${{ matrix.target }}" \
-            -v "$GITHUB_WORKSPACE/output/${{ matrix.target }}:/output" \
-            --mount "type=bind,src=$RUNNER_TEMP/incus-sign-key.pem,dst=/run/secrets/incus_sign_key,readonly" \
+            -e BUILD_TARGET="$TARGET" \
+            -v "$GITHUB_WORKSPACE/output/$TARGET:/output" \
             incus-openwrt-builder
 
-      - name: Upload APK packages
+          apk_count="$(find "output/$TARGET/pkg" -maxdepth 1 \
+            -type f -name "incus-openwrt-$TARGET-*.apk" | wc -l)"
+          test "$apk_count" -eq 1
+          ls -lh "output/$TARGET/pkg/"*.apk
+
+      - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: incus-openwrt-packages-${{ matrix.target }}
-          path: output/${{ matrix.target }}/*
+          name: incus-openwrt-${{ matrix.target }}
+          path: output/${{ matrix.target }}/pkg/*.apk
           if-no-files-found: error
+          retention-days: 7
 
-      - name: Remove signing key
-        if: always()
-        run: rm -f "$RUNNER_TEMP/incus-sign-key.pem"
+  publish-release:
+    needs: build-package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download target APKs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: incus-openwrt-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        run: |
+          set -eu
+          for target in filogic rk3582; do
+            count="$(find release-assets -maxdepth 1 \
+              -type f -name "incus-openwrt-$target-*.apk" | wc -l)"
+            test "$count" -eq 1
+          done
+          ls -lh release-assets/*.apk
+
+      - name: Publish APKs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.apk
+          generate_release_notes: true

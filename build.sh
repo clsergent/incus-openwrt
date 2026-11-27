@@ -43,20 +43,10 @@ if [ "$IN_CONTAINER" = 1 ]; then
     /scripts/build-xz.sh
     /scripts/verify-static.sh
 
-    export INCUS_SIGN_KEY_FILE=/run/secrets/incus_sign_key
-    apk add --no-cache openssl
+    export BUILD_TARGET="$TARGET"
     /scripts/build-apk-packages.sh
     exit 0
 fi
-
-INCUS_SIGN_KEY_FILE="${INCUS_SIGN_KEY_FILE:?Set INCUS_SIGN_KEY_FILE to the APK signing private-key path}"
-[ -r "$INCUS_SIGN_KEY_FILE" ] || {
-    echo "Cannot read signing key: $INCUS_SIGN_KEY_FILE" >&2
-    exit 1
-}
-
-KEY_DIR="$(CDPATH= cd -- "$(dirname -- "$INCUS_SIGN_KEY_FILE")" && pwd)"
-INCUS_SIGN_KEY_FILE="$KEY_DIR/$(basename -- "$INCUS_SIGN_KEY_FILE")"
 
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/output/$TARGET}"
 mkdir -p "$OUTPUT_DIR"
@@ -67,8 +57,7 @@ docker run --rm \
   -e BUILD_IN_CONTAINER=1 \
   -e BUILD_TARGET="$TARGET" \
   -v "$OUTPUT_DIR:/output" \
-  --mount "type=bind,src=$INCUS_SIGN_KEY_FILE,dst=/run/secrets/incus_sign_key,readonly" \
   incus-openwrt-builder
 
-echo "APK packages for $TARGET in $OUTPUT_DIR:"
-ls -lh "$OUTPUT_DIR"
+echo "Standalone APK for $TARGET in $OUTPUT_DIR/pkg:"
+ls -lh "$OUTPUT_DIR/pkg"
